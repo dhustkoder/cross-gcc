@@ -2,14 +2,16 @@
 
 # set up these variables to build the GCC cross compiler
 
-PROJECT_ROOT=""
-BINUTILS_SRC=""
-KERNEL_SRC=""
-GCC_SRC=""
-GLIBC_SRC=""
-TARGET=
-KERNEL_VER=""
-GCC_VER=""
+PROJECT_ROOT="$(pwd)"
+BINUTILS_SRC="$PROJECT_ROOT/src/binutils-2.27.tar.gz"
+KERNEL_SRC="$PROJECT_ROOT/src/linux-4.4.32.tar.gz"
+GCC_SRC="$PROJECT_ROOT/src/gcc-6.2.0.tar.gz"
+GLIBC_SRC="$PROJECT_ROOT/src/glibc-2.24.tar.gz"
+TARGET=mips-none-linux-gnueabi
+KERNEL_ARCH=mips
+KERNEL_CONFIG=defconfig
+KERNEL_VER="4.4.32"
+GCC_VER="6.2.0"
 
 ###################################################################
 ##################################################################
@@ -73,10 +75,10 @@ function install_kernel_headers
 {	
 	cd "$KERNEL_SRC_DIR"
 	make mrproper
-	make ARCH=arm integrator_defconfig
+	make ARCH="$KERNEL_ARCH" "$KERNEL_CONFIG"
 	mkdir -pv "$INSTALL_DIR/sysroot/usr"
-	make ARCH=arm headers_check
-	make ARCH=arm INSTALL_HDR_PATH="$INSTALL_DIR/sysroot/usr" headers_install
+	make ARCH="$KERNEL_ARCH" headers_check
+	make ARCH="$KERNEL_ARCH" INSTALL_HDR_PATH="$INSTALL_DIR/sysroot/usr" headers_install
 }
 
 
@@ -157,8 +159,8 @@ function build_glibc
 		--config-cache --enable-kernel="$KERNEL_VER"
 
 	make -k install-headers cross_compiling=yes install_root="$SYSROOT_DIR"
-	ln -s "$INSTALL_DIR/lib/gcc/arm-none-linux-gnueabi/$GCC_VER/libgcc.a" \
-		"$INSTALL_DIR/lib/gcc/arm-none-linux-gnueabi/$GCC_VER/libgcc_s.a"
+	ln -s "$INSTALL_DIR/lib/gcc/$TARGET/$GCC_VER/libgcc.a" \
+		"$INSTALL_DIR/lib/gcc/$TARGET/$GCC_VER/libgcc_s.a"
 
 	make -j 3
 	make install_root=$SYSROOT_DIR install
@@ -170,6 +172,7 @@ function build_gcc
 	unset CC
 	unset LD
 	unset AS
+
 	export PATH="$INSTALL_DIR/bin:$PATH"
 
 	# *** delete gcc-x.x.x and re-install it ***
@@ -207,6 +210,9 @@ function build_final_gcc
 	unset LD
 	unset AS
 
+	export PATH="$INSTALL_DIR/bin:$PATH"
+	export BUILD_CC=gcc
+
 	# *** delete gcc-x.x.x and re-install it ***
 	cd "$SRC_DIR"
 	rm -vrf "$GCC_SRC_DIR"
@@ -238,6 +244,22 @@ function cleanup
 {
 	rm -vrf "$SRC_DIR"
 	rm -vrf "$BUILD_DIR"
+}
+
+function create_setup_dev_environment_script 
+{
+	if [ ! -f "$SYSROOT_DIR/home" ]; then
+		mkdir -pv "$SYSROOT_DIR/home"
+	fi
+
+	SHFILE="$SYSROOT_DIR/home/setup_dev_environment.sh"
+
+	echo "export PATH=$INSTALL_DIR/bin:$PATH" > "$SHFILE"
+	echo "export CROSS=$TARGET" >> "$SHFILE"
+	echo "export CC=${CROSS}-gcc" >> "$SHFILE"
+	echo "export LD=${CROSS}-ld" >> "$SHFILE"
+	echo "export AS=${CROSS}-as" >> "$SHFILE"
+	chmod +x "$SHFILE"
 }
 
 LOGFILE="$PROJECT_ROOT/build.log"
@@ -275,6 +297,10 @@ echo "final gcc built..." >> "$LOGFILE"
 cleanup
 
 echo "cleaned up build environment..." >> "$LOGFILE"
+
+create_setup_dev_environment_script
+
+echo "created script for setting up development enviroment at $SYSROOT_DIR/home" >> "$LOGFILE"
 
 echo "# COMPLETE #" >> "$LOGFILE"
 
