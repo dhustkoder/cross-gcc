@@ -10,6 +10,7 @@ GLIBC_SRC="$PROJECT_ROOT/src/glibc-2.24.tar.gz"
 TARGET=mips-none-linux-gnueabi
 KERNEL_ARCH=mips
 KERNEL_CONFIG=defconfig
+FLOAT=hard
 KERNEL_VER="4.4.32"
 GCC_VER="6.2.0"
 
@@ -195,7 +196,7 @@ function build_gcc
 	"$GCC_SRC_DIR/configure" --target="$TARGET" --prefix="$INSTALL_DIR" \
 		--with-sysroot="$SYSROOT_DIR" --enable-languages="c" \
 		--with-gnu-as --with-gnu-ld --disable-multilib \
-		--with-float=soft --disable-sjlj-exceptions \
+		--with-float="$FLOAT" --disable-sjlj-exceptions \
 		--disable-nls --enable-threads=posix --enable-long-longx
 
 	make all-gcc
@@ -231,7 +232,7 @@ function build_final_gcc
 	"$GCC_SRC_DIR/configure" --target="$TARGET" --prefix="$INSTALL_DIR" \
 		--with-sysroot="$SYSROOT_DIR" --enable-languages="c" \
 		--with-gnu-as --with-gnu-ld --disable-multilib \
-		--with-float=soft --disable-sjlj-exceptions \
+		--with-float="$FLOAT" --disable-sjlj-exceptions \
 		--disable-nls --enable-threads=posix \
 		--disable-libmudflap --disable-libssp \
 		--enable-long-longx --with-shared
