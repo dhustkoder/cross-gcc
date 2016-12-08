@@ -7,10 +7,11 @@ BINUTILS_SRC="$PROJECT_ROOT/src/binutils-2.27.tar.gz"
 KERNEL_SRC="$PROJECT_ROOT/src/linux-4.4.32.tar.gz"
 GCC_SRC="$PROJECT_ROOT/src/gcc-6.2.0.tar.gz"
 GLIBC_SRC="$PROJECT_ROOT/src/glibc-2.24.tar.gz"
-TARGET=mips-none-linux-gnueabi
-KERNEL_ARCH=mips
-KERNEL_CONFIG=defconfig
-FLOAT=hard
+LANGUAGES="c,c++"
+TARGET=arm-none-linux-gnueabi
+KERNEL_ARCH=arm
+KERNEL_CONFIG=integrator_defconfig
+FLOAT_MODEL=soft
 KERNEL_VER="4.4.32"
 GCC_VER="6.2.0"
 
@@ -22,7 +23,7 @@ set -e
 
 # final install directories
 INSTALL_DIR="$PROJECT_ROOT/$TARGET"
-SYSROOT_DIR="$INSTALL_DIR/sysroot"
+SYSROOT_DIR="$INSTALL_DIR"
 
 # temporary build directories 
 BUILD_DIR="$INSTALL_DIR/build"
@@ -39,6 +40,16 @@ GCC_SRC_DIR="$SRC_DIR/gcc"
 GLIBC_SRC_DIR="$SRC_DIR/glibc"
 KERNEL_SRC_DIR="$SRC_DIR/linux"
 
+# script's log file
+LOGFILE="$PROJECT_ROOT/build.log"
+
+if [ -d $INSTALL_DIR ]; then
+	echo "$INSTALL_DIR already exists." \
+		"Delete it if you really wan't to install in this directory."
+	exit
+elif [ -f "$LOGFILE" ]; then
+	rm -rf "$LOGFILE"
+fi
 
 function extract_sources 
 {
@@ -47,7 +58,7 @@ function extract_sources
 	for ((i = 0; i < ${#sources_tar_files[@]}; ++i)); do
 		out_dir=${sources_out_dirs[$i]}
 		
-		if [ -f "$out_dir" ]; then
+		if [ -d "$out_dir" ]; then
 			rm -vrf "$out_dir"
 		fi
 
@@ -58,7 +69,7 @@ function extract_sources
 
 function build_binutils
 {
-	if [ -f "$BINUTILS_BUILD_DIR" ]; then
+	if [ -d "$BINUTILS_BUILD_DIR" ]; then
 		rm -vrf "$BINUTILS_BUILD_DIR"
 	fi
 
@@ -77,15 +88,15 @@ function install_kernel_headers
 	cd "$KERNEL_SRC_DIR"
 	make mrproper
 	make ARCH="$KERNEL_ARCH" "$KERNEL_CONFIG"
-	mkdir -pv "$INSTALL_DIR/sysroot/usr"
+	mkdir -pv "$SYSROOT_DIR/usr"
 	make ARCH="$KERNEL_ARCH" headers_check
-	make ARCH="$KERNEL_ARCH" INSTALL_HDR_PATH="$INSTALL_DIR/sysroot/usr" headers_install
+	make ARCH="$KERNEL_ARCH" INSTALL_HDR_PATH="$SYSROOT_DIR/usr" headers_install
 }
 
 
 function bootstrap_gcc
 {
-	if [ -f "$BOOTSTRAP_GCC_BUILD_DIR" ]; then
+	if [ -d "$BOOTSTRAP_GCC_BUILD_DIR" ]; then
 		rm -vrf "$BOOTSTRAP_GCC_BUILD_DIR"
 	fi
 
@@ -109,7 +120,7 @@ function bootstrap_gcc
 function build_glibc
 {
 	# installing headers
-	if [ -f "$GLIBC_BUILD_DIR" ]; then
+	if [ -d "$GLIBC_BUILD_DIR" ]; then
 		rm -vrf "$GLIBC_BUILD_DIR"
 	fi
 
@@ -132,7 +143,7 @@ function build_glibc
 
 	# *** We need to move some files ***
 	
-	pushd "$SYSROOT_DIR/$INSTALL_DIR/sysroot/usr/include"
+	pushd "$SYSROOT_DIR/$INSTALL_DIR/usr/include"
 	cp -rv * "$SYSROOT_DIR/usr/include/"
 	popd
 
@@ -194,9 +205,9 @@ function build_gcc
 	export BUILD_CC=gcc
 	
 	"$GCC_SRC_DIR/configure" --target="$TARGET" --prefix="$INSTALL_DIR" \
-		--with-sysroot="$SYSROOT_DIR" --enable-languages="c" \
+		--with-sysroot="$SYSROOT_DIR" --enable-languages="$LANGUAGES" \
 		--with-gnu-as --with-gnu-ld --disable-multilib \
-		--with-float="$FLOAT" --disable-sjlj-exceptions \
+		--with-float="$FLOAT_MODEL" --disable-sjlj-exceptions \
 		--disable-nls --enable-threads=posix --enable-long-longx
 
 	make all-gcc
@@ -230,9 +241,9 @@ function build_final_gcc
 	echo "libc_cv_c_cleanup=yes" >> config.cache
 	
 	"$GCC_SRC_DIR/configure" --target="$TARGET" --prefix="$INSTALL_DIR" \
-		--with-sysroot="$SYSROOT_DIR" --enable-languages="c" \
+		--with-sysroot="$SYSROOT_DIR" --enable-languages="$LANGUAGES" \
 		--with-gnu-as --with-gnu-ld --disable-multilib \
-		--with-float="$FLOAT" --disable-sjlj-exceptions \
+		--with-float="$FLOAT_MODEL" --disable-sjlj-exceptions \
 		--disable-nls --enable-threads=posix \
 		--disable-libmudflap --disable-libssp \
 		--enable-long-longx --with-shared
@@ -249,59 +260,64 @@ function cleanup
 
 function create_setup_dev_environment_script 
 {
-	if [ ! -f "$SYSROOT_DIR/home" ]; then
+	if [ ! -d "$SYSROOT_DIR/home" ]; then
 		mkdir -pv "$SYSROOT_DIR/home"
 	fi
 
-	SHFILE="$SYSROOT_DIR/home/setup_dev_environment.sh"
+	SHFILE="$SYSROOT_DIR/home/compile.sh"
 
-	echo "export PATH=$INSTALL_DIR/bin:$PATH" > "$SHFILE"
+	echo "export PATH=$INSTALL_DIR/bin" > "$SHFILE"
 	echo "export CROSS=$TARGET" >> "$SHFILE"
-	echo "export CC=${CROSS}-gcc" >> "$SHFILE"
-	echo "export LD=${CROSS}-ld" >> "$SHFILE"
-	echo "export AS=${CROSS}-as" >> "$SHFILE"
+	echo "export CC=\${CROSS}-gcc" >> "$SHFILE"
+	echo "export LD=\${CROSS}-ld" >> "$SHFILE"
+	echo "export AS=\${CROSS}-as" >> "$SHFILE"
+	echo "# write your compilation commands or build system call, whatever" >> "$SHFILE"
 	chmod +x "$SHFILE"
 }
 
-LOGFILE="$PROJECT_ROOT/build.log"
 
-echo "# BUILD LOG #" > "$LOGFILE"
+function log 
+{
+	echo $@ >> $LOGFILE
+}
+
+log "# BUILD LOG #"
 
 extract_sources
 
-echo "sources extracted..." >> "$LOGFILE"
+log "sources extracted..."
 
 build_binutils
 
-echo "binutils built..." >> "$LOGFILE"
+log "binutils built..."
 
 install_kernel_headers
 
-echo "kernel headers installed..." >> "$LOGFILE"
+log "kernel headers installed..."
 
 bootstrap_gcc
 
-echo "bootstrap_gcc built..." >> "$LOGFILE"
+log "bootstrap_gcc built..."
 
 build_glibc
 
-echo "glibc built..." >> "$LOGFILE"
+log "glibc built..."
 
 build_gcc
 
-echo "gcc built..." >> "$LOGFILE"
+log "gcc built..."
 
 build_final_gcc
 
-echo "final gcc built..." >> "$LOGFILE"
+log "final gcc built..."
 
 cleanup
 
-echo "cleaned up build environment..." >> "$LOGFILE"
+log "cleaned up build environment..."
 
 create_setup_dev_environment_script
 
-echo "created script for setting up development enviroment at $SYSROOT_DIR/home" >> "$LOGFILE"
+log "created script for setting up development enviroment at $SYSROOT_DIR/home"
 
-echo "# COMPLETE #" >> "$LOGFILE"
+log "# COMPLETE #"
 
