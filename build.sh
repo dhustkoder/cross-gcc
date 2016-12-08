@@ -104,7 +104,7 @@ function bootstrap_gcc
 	cd "$BOOTSTRAP_GCC_BUILD_DIR"
 	
 	"$GCC_SRC_DIR/configure" --target="$TARGET" --prefix="$INSTALL_DIR" \
-		--without-headers --enable-boostrap --enable-languages="c" \
+		--without-headers --enable-boostrap --enable-languages="$LANGUAGES" \
 		--disable-threads --enable-__cxa_atexit --disable-libmudflap \
 		--with-gnu-ld --with-gnu-as --disable-libssp --disable-libgomp \
 		--disable-nls --disable-shared
@@ -258,21 +258,34 @@ function cleanup
 	rm -vrf "$BUILD_DIR"
 }
 
-function create_setup_dev_environment_script 
+function create_compile_script
 {
 	if [ ! -d "$SYSROOT_DIR/home" ]; then
 		mkdir -pv "$SYSROOT_DIR/home"
 	fi
+	
+	script_file="$SYSROOT_DIR/home/compile.sh"
+	
+	if [ -f "$script_file" ]; then
+		rm -rf "$script_file"
+		touch "$script_file"		
+	fi
 
-	SHFILE="$SYSROOT_DIR/home/compile.sh"
+	function write
+	{
+		echo $@ >> "$script_file"
+	}
 
-	echo "export PATH=$INSTALL_DIR/bin" > "$SHFILE"
-	echo "export CROSS=$TARGET" >> "$SHFILE"
-	echo "export CC=\${CROSS}-gcc" >> "$SHFILE"
-	echo "export LD=\${CROSS}-ld" >> "$SHFILE"
-	echo "export AS=\${CROSS}-as" >> "$SHFILE"
-	echo "# write your compilation commands or build system call, whatever" >> "$SHFILE"
-	chmod +x "$SHFILE"
+	write "export INSTALL_DIR=$INSTALL_DIR"
+	write "export TARGET=$TARGET"
+	write "export PATH=\$INSTALL_DIR/bin:\$PATH"
+	write "export CC=\${TARGET}-gcc"
+	write "export CXX=\"\${TARGET}-g++ -L\$INSTALL_DIR/\$TARGET/lib\""
+	write "export LD=\${TARGET}-ld"
+	write "export AS=\${TARGET}-as"
+	write "# write your compilation commands or build system call, whatever"
+
+	chmod +x "$script_file"
 }
 
 
@@ -315,7 +328,7 @@ cleanup
 
 log "cleaned up build environment..."
 
-create_setup_dev_environment_script
+create_compile_script
 
 log "created script for setting up development enviroment at $SYSROOT_DIR/home"
 
