@@ -43,7 +43,7 @@ KERNEL_SRC_DIR="$SRC_DIR/linux"
 # script's log file
 LOGFILE="$PROJECT_ROOT/build.log"
 
-if [ -d $INSTALL_DIR ]; then
+if [ -d "$INSTALL_DIR" ]; then
 	echo "$INSTALL_DIR already exists." \
 		"Delete it if you really wan't to install in this directory."
 	exit
@@ -291,8 +291,9 @@ function create_compile_script
 
 function log 
 {
-	echo $@ >> $LOGFILE
+	echo $@ >> "$LOGFILE"
 }
+
 
 log "# BUILD LOG #"
 
